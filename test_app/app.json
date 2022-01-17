@@ -1,0 +1,13 @@
+{
+  "events": {
+    "load": [
+      "ui_function.js:showUI"
+    ],
+    "inc": [
+      "ui_function.js:inc"
+    ],
+    "dec": [
+      "ui_function.js:dec"
+    ]
+  }
+}

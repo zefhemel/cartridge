@@ -1,0 +1,72 @@
+<html>
+<head>
+    <!--script src="https://cdn.tailwindcss.com"></script-->
+    <script type="module">
+        import { h, Component, render, Fragment } from 'https://unpkg.com/preact?module';
+
+        class App extends Component {
+            constructor() {
+                super();
+                this.state = {
+                    tree: h('h1', null, 'Initial')
+                }
+                window.addEventListener('update-tree', e => {
+                    this.setState({
+                        tree: e.detail
+                    });
+                })
+            }
+            render() {
+                return this.state.tree;
+            }
+        }
+
+        let app = h(App);
+        render(app, document.body);
+
+        function hDocList(doc) {
+            if(Array.isArray(doc)) {
+                return h(Fragment, null, ...doc.map(hDoc));
+            } else {
+                return doc;
+            }
+        }
+
+        function hDoc([tag, attributes, bodies]) {
+            let newAttrs = {};
+            for(let k in attributes) {
+                let v = attributes[k];
+                // Replace string "on" event triggers with triggerEvent calls
+                if(k.startsWith('on') && typeof v === "string") {
+                    newAttrs[k] = (e) => {
+                        triggerEvent({
+                            event: v,
+                            attributes
+                        });
+                    }
+                } else {
+                    newAttrs[k] = v;
+                }
+            }
+            return h(tag, newAttrs, ...hDocList(bodies));
+        }
+
+        function triggerEvent(data) {
+            window.parent.postMessage({
+                type: 'iframe_event',
+                data: data
+            });
+        }
+
+        window.addEventListener('message', function(evt) {
+            let data = evt.data;
+            if(data.type === 'loadContent') {
+                let tree = hDocList(data.doc);
+                window.dispatchEvent(new CustomEvent('update-tree', {detail: tree}));
+            }
+        })
+    </script>
+</head>
+<body>
+</body>
+</html>
