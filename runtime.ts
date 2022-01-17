@@ -1,34 +1,38 @@
-class SyscallContext {
-    constructor(cartridge) {
+import {Manifest} from "./types.d.ts";
+
+export class SyscallContext {
+    public cartridge: Cartridge;
+
+    constructor(cartridge: Cartridge) {
         this.cartridge = cartridge;
     }
 }
 
+interface SysCallMapping {
+    // TODO: Better typing
+    [key: string]: any;
+}
+
 export class Runtime {
+    registeredSyscalls: SysCallMapping;
+
     constructor() {
         this.registeredSyscalls = {};
     }
 
-    /**
-     * Registers one or multiple syscalls with associated callbacks, each callback will be invoked with a SyscallContext first
-     * @param registrationObject mapping name to callbacks
-     */
-    registerSyscalls(...registrationObjects) {
-        for(const registrationObject of registrationObjects) {
+    registerSyscalls(...registrationObjects: Array<SysCallMapping>) {
+        for (const registrationObject of registrationObjects) {
             for (let p in registrationObject) {
                 this.registeredSyscalls[p] = registrationObject[p];
             }
         }
     }
 
-    /**
-     * Invoke a syscall by name
-     * @param ctx SyscallContext
-     * @param name name of syscall
-     * @param args array of arguments to pass to syscall
-     * @returns {Promise<unknown>}
-     */
-    async syscall(ctx, name, args) {
+    async syscall(
+        ctx: SyscallContext,
+        name: string,
+        args: Array<any>,
+    ): Promise<any> {
         const callback = this.registeredSyscalls[name];
         if (!name) {
             throw Error(`Unregistered syscall ${name}`);
@@ -38,15 +42,31 @@ export class Runtime {
 }
 
 export class FunctionWorker {
-    constructor(cartridge, url, path) {
+    private worker: Worker;
+    private inited: Promise<any>;
+    private initCallback: any;
+    private invokeCallback: any;
+    private cartridge: Cartridge;
+    private runtime: any;
+
+    constructor(cartridge: Cartridge, url: string, name: string) {
+        let workerUrl = "./worker.js";
+        // @ts-ignore
+        if (!navigator.userAgent) {
+            // Deno
+            workerUrl = new URL(workerUrl, import.meta.url).href;
+        }
         this.worker = new Worker(
-            new URL("./worker.js", import.meta.url).href,
-            {type: "module"}
+            workerUrl,
+            {type: "module"},
         );
         this.worker.onmessage = this.onmessage.bind(this);
         this.worker.postMessage({
-            type: 'boot',
-            path: `${url}/${path}`
+            type: "boot",
+            prefix: url,
+            name: name,
+            // @ts-ignore
+            userAgent: navigator.userAgent,
         });
         this.inited = new Promise((resolve, reject) => {
             this.initCallback = resolve;
@@ -55,7 +75,7 @@ export class FunctionWorker {
         this.runtime = cartridge.runtime;
     }
 
-    async onmessage(evt) {
+    async onmessage(evt: MessageEvent) {
         let data = evt.data;
         if (!data) return;
         switch (data.type) {
@@ -80,11 +100,11 @@ export class FunctionWorker {
         }
     }
 
-    async invoke(data) {
+    async invoke(args: Array<any>): Promise<any> {
         await this.inited;
         this.worker.postMessage({
             type: "invoke",
-            data: data,
+            args: args,
         });
         return new Promise((resolve, reject) => {
             this.invokeCallback = resolve;
@@ -97,39 +117,48 @@ export class FunctionWorker {
 }
 
 export class Cartridge {
-    constructor(runtime, url) {
-        this.url = url;
+    url: string;
+    runtime: Runtime;
+
+    private runningFunctions: { [key: string]: FunctionWorker };
+    private manifest: Manifest;
+
+    constructor(runtime: Runtime, url: string, name: string) {
+        this.url = `${url}/${name}`;
         this.runtime = runtime;
         this.runningFunctions = {};
     }
 
-    async load() {
-        let manifestRequest = await fetch(`${this.url}/app.json`)
-        let manifestJson = await manifestRequest.json();
-        this.manifest = manifestJson;
+    async load(manifest: Manifest) {
+        this.manifest = manifest;
+        await fetch(this.url, {
+            method: "PUT",
+            body: JSON.stringify(manifest),
+        });
     }
 
-    async invoke(name, data) {
+    async invoke(name: string, args: Array<any>): Promise<any> {
         if (!this.runningFunctions[name]) {
             this.runningFunctions[name] = new FunctionWorker(this, this.url, name);
         }
-        await this.runningFunctions[name].invoke(data);
+        await this.runningFunctions[name].invoke(args);
         // f.stop();
     }
 
-    async dispatchEvent(name, data) {
+    async dispatchEvent(name: string, data?: any) {
         let functionsToSpawn = this.manifest.events[name];
         if (functionsToSpawn) {
-            await Promise.all(functionsToSpawn.map(async functionToSpawn => {
-                await this.invoke(functionToSpawn, data);
-            }));
+            await Promise.all(
+                functionsToSpawn.map(async (functionToSpawn: string) => {
+                    await this.invoke(functionToSpawn, [data]);
+                }),
+            );
         }
     }
 
     start() {
-        this.dispatchEvent('load');
+        this.dispatchEvent("load");
     }
 }
-
 
 console.log("Starting");

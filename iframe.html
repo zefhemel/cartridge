@@ -1,8 +1,10 @@
+<!DOCTYPE html>
 <html>
 <head>
     <!--script src="https://cdn.tailwindcss.com"></script-->
+    <meta charset="UTF-8">
     <script type="module">
-        import { h, Component, render, Fragment } from 'https://unpkg.com/preact?module';
+        import {Component, Fragment, h, render} from 'https://unpkg.com/preact?module';
 
         class App extends Component {
             constructor() {
@@ -16,6 +18,7 @@
                     });
                 })
             }
+
             render() {
                 return this.state.tree;
             }
@@ -25,7 +28,7 @@
         render(app, document.body);
 
         function hDocList(doc) {
-            if(Array.isArray(doc)) {
+            if (Array.isArray(doc)) {
                 return h(Fragment, null, ...doc.map(hDoc));
             } else {
                 return doc;
@@ -34,14 +37,14 @@
 
         function hDoc([tag, attributes, bodies]) {
             let newAttrs = {};
-            for(let k in attributes) {
+            for (let k in attributes) {
                 let v = attributes[k];
                 // Replace string "on" event triggers with triggerEvent calls
-                if(k.startsWith('on') && typeof v === "string") {
+                if (k.startsWith('on') && typeof v === "string") {
                     newAttrs[k] = (e) => {
                         triggerEvent({
                             event: v,
-                            attributes
+                            data: attributes
                         });
                     }
                 } else {
@@ -58,9 +61,9 @@
             });
         }
 
-        window.addEventListener('message', function(evt) {
+        window.addEventListener('message', function (evt) {
             let data = evt.data;
-            if(data.type === 'loadContent') {
+            if (data.type === 'loadContent') {
                 let tree = hDocList(data.doc);
                 window.dispatchEvent(new CustomEvent('update-tree', {detail: tree}));
             }

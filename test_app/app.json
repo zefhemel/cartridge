@@ -1,13 +1,24 @@
 {
   "events": {
     "load": [
-      "ui_function.js:showUI"
+      "showUI"
     ],
     "inc": [
-      "ui_function.js:inc"
+      "inc"
     ],
     "dec": [
-      "ui_function.js:dec"
+      "dec"
     ]
+  },
+  "functions": {
+    "showUI": {
+      "path": "./ui_function.ts:showUI"
+    },
+    "inc": {
+      "path": "./ui_function.ts:inc"
+    },
+    "dec": {
+      "path": "./ui_function.ts:dec"
+    }
   }
 }
